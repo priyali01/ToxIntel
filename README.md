@@ -299,33 +299,31 @@ Step 4:  Re-predict all 12 endpoints for each candidate
 ```
 PDS_exp10/
 ├── data/
-│   ├── tox21.csv                    # Raw dataset (7,831 compounds, 12 endpoints)
-│   ├── drugbank_fps.pkl             # DrugBank fingerprints (coverage check)
-│   └── ochem_alerts.json            # Structural alert SMARTS from OCHEM
-├── notebooks/
-│   ├── 01_EDA.py                    # Class balance, scaffold distribution
-│   ├── 02_Geometric_Imbalance.py    # Intraclass Tanimoto cohesion analysis ← Novel
-│   ├── 03_Featurization_Ablation.py # ECFP4 vs MACCS vs RDKit comparison
-│   ├── 04_Training.py               # ToxNet + Focal Loss + OPTUNA
-│   ├── 05_Evaluation.py             # AUPRC / AUROC / MCC / threshold tuning
-│   └── 06_Prescription.py           # Full pipeline end-to-end demo
+│   └── tox21.csv                    # Raw dataset (8,014 compounds → 8,006 valid, 12 endpoints)
+├── notebooks/                       # Each notebook has .ipynb + .py (jupytext source)
+│   ├── 01_EDA.ipynb                 # ✅ Class balance, NaN distribution, imbalance ratios
+│   ├── 02_Geometric_Imbalance.ipynb # ✅ Intraclass Tanimoto cohesion analysis ← Novel
+│   ├── 03_Featurization_Ablation.ipynb # ✅ ECFP4 vs ECFP6 vs MACCS vs RDKit comparison
+│   ├── 04_Training.ipynb            # ✅ ToxNet + Focal Loss + OPTUNA tuning
+│   ├── 05_Evaluation.ipynb          # ⬜ AUPRC / AUROC / MCC / threshold tuning
+│   └── 06_Prescription.ipynb        # ⬜ Full pipeline end-to-end demo
 ├── src/
 │   ├── __init__.py                  # Package init
 │   ├── featurize.py                 # SMILES validation + 5 fingerprint representations
-│   ├── scaffold_split.py            # Murcko scaffold stratified split
-│   ├── geometric_imbalance.py       # Intraclass cohesion analysis ← Novel
-│   ├── focal_loss.py                # PerEndpointFocalLoss (PyTorch)
-│   ├── model.py                     # ToxNet architecture (shared backbone + 12 heads)
-│   ├── train.py                     # Training loop + OPTUNA
-│   ├── evaluate.py                  # Full metric suite
-│   ├── shap_validator.py            # SHAP × alert cross-validation
+│   ├── scaffold_split.py            # Murcko scaffold stratified split (no structural leakage)
+│   ├── geometric_imbalance.py       # Intraclass Tanimoto cohesion analysis ← Novel
+│   ├── focal_loss.py                # PerEndpointFocalLoss with NaN masking (PyTorch)
+│   ├── model.py                     # ToxNet: shared backbone [2048→1024→512→256] + 12 heads
+│   ├── train.py                     # Training loop + OPTUNA hyperparameter search
+│   ├── evaluate.py                  # Full metric suite (coming next)
+│   ├── shap_validator.py            # SHAP × structural alert cross-validation
 │   ├── bioisostere.py               # ChEMBL query + SAScore filter
 │   ├── pareto.py                    # Pareto dominance evaluation
 │   ├── uncertainty.py               # Temperature scaling + OOD detection
 │   └── prescription_pipeline.py     # Full corrected 4-step pipeline
 ├── models/
-│   └── toxnet_final.pt              # Trained ToxNet weights
-├── Documents/                       # Research specs, literature, chat logs
+│   └── toxnet_final.pt              # Trained ToxNet weights (2.96M parameters)
+├── Documents/                       # Research specs, literature, build session logs
 ├── app.py                           # Streamlit dashboard
 ├── requirements.txt                 # pip dependencies
 ├── .gitignore
@@ -384,12 +382,20 @@ streamlit run app.py
 
 ### Running the Notebooks
 
-Notebooks use the `# %%` cell format (compatible with VS Code and Jupyter).
+All notebooks are available as `.ipynb` files. Open them in Jupyter or VS Code:
 
 ```bash
-# Run in VS Code: Open .py file → "Run Cell" buttons appear automatically
-# Or convert to .ipynb: jupytext --to notebook notebooks/01_EDA.py
+# Option 1: Jupyter Notebook
+jupyter notebook notebooks/01_EDA.ipynb
+
+# Option 2: VS Code — just open the .ipynb file, click "Run All"
+
+# Option 3: Execute from command line
+jupyter nbconvert --to notebook --execute notebooks/01_EDA.ipynb --inplace
 ```
+
+> **Note:** `.py` source files are also included for each notebook (jupytext format).
+> These are plain-text readable versions of the same code.
 
 ---
 
@@ -397,20 +403,21 @@ Notebooks use the `# %%` cell format (compatible with VS Code and Jupyter).
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
-| Environment | Conda | Manages RDKit, PyTorch, and system-level ML dependencies |
-| Data Processing | Pandas, NumPy | CSV loading, NaN handling, array operations |
+| Environment | venv + pip | Lightweight virtual environment (no Conda needed) |
+| Data Processing | Pandas, NumPy | CSV loading, NaN→-1 sentinel, array operations |
 | Chemistry | RDKit | SMILES validation, fingerprints, scaffolds, SAScore, structural alerts |
 | Featurization | RDKit (AllChem) | ECFP4/ECFP6/MACCS + bitInfo capture for SHAP atom mapping |
 | Imbalance | imbalanced-learn | ADASYN + TomekLinks in embedding space |
-| Loss Function | PyTorch (custom) | PerEndpointFocalLoss with NaN masking |
-| Model | PyTorch | ToxNet — shared backbone + 12 task heads |
-| Hyperparameter Search | Optuna | 50 trials optimizing lr, dropout, γ, dims |
-| Evaluation | scikit-learn | AUPRC, AUROC, F1, MCC, precision-recall curves |
-| Explainability | SHAP | DeepExplainer → bit-level attribution |
+| Loss Function | PyTorch (custom) | PerEndpointFocalLoss with NaN masking + per-endpoint α weights |
+| Model | PyTorch | ToxNet — shared backbone [2048→1024→512→256] + 12 task heads |
+| Hyperparameter Search | Optuna | Tuning lr, dropout, γ, batch_size, hidden_dims, weight_decay |
+| Evaluation | scikit-learn | AUPRC (primary), AUROC, F1, MCC, precision-recall curves |
+| Explainability | SHAP | DeepExplainer → bit-level attribution → atom-level mapping |
 | Bioisostere DB | chembl-webresource-client | Offline cache of fragment replacements |
 | Uncertainty | SciPy, MAPIE | Temperature scaling + conformal prediction |
 | Dashboard | Streamlit + Plotly | Interactive UI, radar charts, Pareto tables |
 | Visualization | Matplotlib, Seaborn, Plotly | Heatmaps, PR curves, cohesion plots |
+| Notebook Tooling | jupytext, nbconvert | .py ↔ .ipynb conversion and headless execution |
 
 ---
 
