@@ -305,7 +305,7 @@ PDS_exp10/
 │   ├── 02_Geometric_Imbalance.ipynb # ✅ Intraclass Tanimoto cohesion analysis ← Novel
 │   ├── 03_Featurization_Ablation.ipynb # ✅ ECFP4 vs ECFP6 vs MACCS vs RDKit comparison
 │   ├── 04_Training.ipynb            # ✅ ToxNet + Focal Loss + OPTUNA tuning
-│   ├── 05_Evaluation.ipynb          # ⬜ AUPRC / AUROC / MCC / threshold tuning
+│   ├── 05_Evaluation.ipynb          # ✅ AUPRC / AUROC / MCC / threshold tuning
 │   └── 06_Prescription.ipynb        # ⬜ Full pipeline end-to-end demo
 ├── src/
 │   ├── __init__.py                  # Package init
@@ -315,7 +315,7 @@ PDS_exp10/
 │   ├── focal_loss.py                # PerEndpointFocalLoss with NaN masking (PyTorch)
 │   ├── model.py                     # ToxNet: shared backbone [2048→1024→512→256] + 12 heads
 │   ├── train.py                     # Training loop + OPTUNA hyperparameter search
-│   ├── evaluate.py                  # Full metric suite (coming next)
+│   ├── evaluate.py                  # Full metric suite + threshold calibration
 │   ├── shap_validator.py            # SHAP × structural alert cross-validation
 │   ├── bioisostere.py               # ChEMBL query + SAScore filter
 │   ├── pareto.py                    # Pareto dominance evaluation
@@ -340,8 +340,8 @@ PDS_exp10/
 | Phase 2: Featurization + Split | ✅ Done | `featurize.py`, `scaffold_split.py` |
 | Phase 3: Geometric Imbalance | ✅ Done | `geometric_imbalance.py`, `focal_loss.py` |
 | Phase 4: ToxNet Training | ✅ Done | `model.py`, `train.py` |
-| Phase 5: Evaluation | ⬜ Next | `evaluate.py` |
-| Phase 6: Prescription Pipeline | ⬜ Pending | `prescription_pipeline.py` |
+| Phase 5: Evaluation | ✅ Done | `evaluate.py`, `05_Evaluation.ipynb` |
+| Phase 6: Prescription Pipeline | ⬜ Next | `prescription_pipeline.py` |
 | Phase 7: Dashboard | ⬜ Pending | `app.py` |
 
 ---
