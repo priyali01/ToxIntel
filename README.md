@@ -306,7 +306,7 @@ PDS_exp10/
 │   ├── 03_Featurization_Ablation.ipynb # ✅ ECFP4 vs ECFP6 vs MACCS vs RDKit comparison
 │   ├── 04_Training.ipynb            # ✅ ToxNet + Focal Loss + OPTUNA tuning
 │   ├── 05_Evaluation.ipynb          # ✅ AUPRC / AUROC / MCC / threshold tuning
-│   └── 06_Prescription.ipynb        # ⬜ Full pipeline end-to-end demo
+│   └── 06_Prescription.ipynb        # ✅ Full pipeline end-to-end demo
 ├── src/
 │   ├── __init__.py                  # Package init
 │   ├── featurize.py                 # SMILES validation + 5 fingerprint representations
@@ -341,8 +341,8 @@ PDS_exp10/
 | Phase 3: Geometric Imbalance | ✅ Done | `geometric_imbalance.py`, `focal_loss.py` |
 | Phase 4: ToxNet Training | ✅ Done | `model.py`, `train.py` |
 | Phase 5: Evaluation | ✅ Done | `evaluate.py`, `05_Evaluation.ipynb` |
-| Phase 6: Prescription Pipeline | ⬜ Next | `prescription_pipeline.py` |
-| Phase 7: Dashboard | ⬜ Pending | `app.py` |
+| Phase 6: Prescription Pipeline | ✅ Done | `prescription_pipeline.py`, `06_Prescription.ipynb` |
+| Phase 7: Dashboard | ⬜ Next | `app.py` |
 
 ---
 

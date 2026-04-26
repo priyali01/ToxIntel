@@ -116,6 +116,35 @@ class ToxNet(nn.Module):
 
         return logits
 
+def load_toxnet(filepath='models/toxnet_final.pt', input_dim=2048):
+    """
+    Robustly loads ToxNet by trying the three possible hidden_dims configurations 
+    that OPTUNA might have selected in Phase 4.
+    """
+    import torch
+    import os
+    
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"Model file {filepath} not found.")
+        
+    state_dict = torch.load(filepath, map_location='cpu', weights_only=True)
+    
+    # The possible OPTUNA configurations from train.py
+    configs = [
+        [1024, 512, 256],          # medium (default)
+        [512, 256, 128],           # small
+        [1024, 512, 512, 256]      # large
+    ]
+    
+    for dims in configs:
+        try:
+            model = ToxNet(input_dim=input_dim, hidden_dims=dims)
+            model.load_state_dict(state_dict)
+            return model
+        except Exception:
+            continue
+            
+    raise RuntimeError("Failed to load model state_dict. None of the expected hidden_dims configurations matched.")
 
 # ── Run when called directly (for quick testing) ──────────────────
 if __name__ == '__main__':

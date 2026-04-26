@@ -24,7 +24,7 @@ import seaborn as sns
 
 from src.featurize import load_and_clean_tox21, TARGET_COLS
 from src.scaffold_split import scaffold_split
-from src.model import ToxNet
+from src.model import ToxNet, load_toxnet
 from src.train import prepare_data
 from src.evaluate import evaluate_all_endpoints, tune_threshold
 from src.geometric_imbalance import analyze_all_endpoints
@@ -36,15 +36,12 @@ from src.geometric_imbalance import analyze_all_endpoints
 # Load data identical to Phase 4
 X_train, Y_train, X_val, Y_val, X_test, Y_test, pos_weights = prepare_data()
 
-# Initialize model and load weights
-# We assume toxnet_final.pt exists from Phase 4 execution
-model = ToxNet(input_dim=2048)
+# Initialize model and load weights robustly
 try:
-    model.load_state_dict(torch.load('models/toxnet_final.pt', map_location='cpu'))
-    print("✅ Successfully loaded models/toxnet_final.pt")
+    model = load_toxnet('models/toxnet_final.pt', input_dim=2048)
+    print("[SUCCESS] Successfully loaded models/toxnet_final.pt")
 except Exception as e:
-    print(f"❌ Failed to load model weights: {e}")
-    # If it fails, you must run 04_Training.ipynb first!
+    print(f"[ERROR] Failed to load model weights: {e}")
 
 model.eval()
 
@@ -157,16 +154,16 @@ print("\n=== Phase 5 Verification ===")
 
 # 1. 13 rows
 assert results_df.shape[0] == 13, f"Expected 13 rows, got {results_df.shape[0]}"
-print("✅ Result table has 12 endpoints + 1 macro row")
+print("[SUCCESS] Result table has 12 endpoints + 1 macro row")
 
 # 2. Bounds
 valid_auprcs = results_df['AUPRC'].dropna()
 assert all(0 <= v <= 1 for v in valid_auprcs), "AUPRC out of bounds"
-print("✅ All metrics in [0, 1]")
+print("[SUCCESS] All metrics in [0, 1]")
 
 # 3. Recall floor
 assert all(c['Recall'] >= 0.8499 for c in calibrations), "Recall floor not met"
-print("✅ Threshold tuning respects 0.85 recall floor")
+print("[SUCCESS] Threshold tuning respects 0.85 recall floor")
 
 # 4. Beat baseline
 for _, row in results_df.iloc[:-1].iterrows():
@@ -174,7 +171,7 @@ for _, row in results_df.iloc[:-1].iterrows():
         prev = float(row['Prevalence'].strip('%')) / 100
         # If the endpoint doesn't beat prevalence, flag it (could be valid depending on the model, but usually means failed learning)
         if row['AUPRC'] <= prev:
-            print(f"⚠️ Warning: Endpoint {row['Endpoint']} AUPRC ({row['AUPRC']}) did not beat prevalence ({prev:.4f})")
-print("✅ Baseline beat check completed")
+            print(f"[WARNING] Endpoint {row['Endpoint']} AUPRC ({row['AUPRC']}) did not beat prevalence ({prev:.4f})")
+print("[SUCCESS] Baseline beat check completed")
 
-print("\n🚀 Phase 5 Complete! Move to Phase 6.")
+print("\n[INFO] Phase 5 Complete! Move to Phase 6.")
