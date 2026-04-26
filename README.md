@@ -303,18 +303,19 @@ PDS_exp10/
 │   ├── drugbank_fps.pkl             # DrugBank fingerprints (coverage check)
 │   └── ochem_alerts.json            # Structural alert SMARTS from OCHEM
 ├── notebooks/
-│   ├── 01_EDA.ipynb                 # Class balance, scaffold distribution
-│   ├── 02_Geometric_Imbalance.ipynb # Intraclass Tanimoto cohesion analysis
-│   ├── 03_Featurization_Ablation.ipynb  # ECFP4 vs MACCS vs RDKit comparison
-│   ├── 04_Training.ipynb            # ToxNet + Focal Loss + OPTUNA
-│   ├── 05_Evaluation.ipynb          # AUPRC / AUROC / MCC / threshold tuning
-│   └── 06_Prescription.ipynb        # Full pipeline end-to-end demo
+│   ├── 01_EDA.py                    # Class balance, scaffold distribution
+│   ├── 02_Geometric_Imbalance.py    # Intraclass Tanimoto cohesion analysis ← Novel
+│   ├── 03_Featurization_Ablation.py # ECFP4 vs MACCS vs RDKit comparison
+│   ├── 04_Training.py               # ToxNet + Focal Loss + OPTUNA
+│   ├── 05_Evaluation.py             # AUPRC / AUROC / MCC / threshold tuning
+│   └── 06_Prescription.py           # Full pipeline end-to-end demo
 ├── src/
-│   ├── featurize.py                 # Multi-representation featurization
+│   ├── __init__.py                  # Package init
+│   ├── featurize.py                 # SMILES validation + 5 fingerprint representations
 │   ├── scaffold_split.py            # Murcko scaffold stratified split
-│   ├── geometric_imbalance.py       # Intraclass cohesion analysis
+│   ├── geometric_imbalance.py       # Intraclass cohesion analysis ← Novel
 │   ├── focal_loss.py                # PerEndpointFocalLoss (PyTorch)
-│   ├── model.py                     # ToxNet architecture
+│   ├── model.py                     # ToxNet architecture (shared backbone + 12 heads)
 │   ├── train.py                     # Training loop + OPTUNA
 │   ├── evaluate.py                  # Full metric suite
 │   ├── shap_validator.py            # SHAP × alert cross-validation
@@ -323,13 +324,27 @@ PDS_exp10/
 │   ├── uncertainty.py               # Temperature scaling + OOD detection
 │   └── prescription_pipeline.py     # Full corrected 4-step pipeline
 ├── models/
-│   ├── toxnet_final.pt              # Trained ToxNet weights
-│   └── temperatures.pkl             # Per-endpoint calibration temperatures
-├── Documents/                       # Research specifications & literature
+│   └── toxnet_final.pt              # Trained ToxNet weights
+├── Documents/                       # Research specs, literature, chat logs
 ├── app.py                           # Streamlit dashboard
-├── environment.yml                  # Conda environment
+├── requirements.txt                 # pip dependencies
+├── .gitignore
 └── plan.md                          # Master implementation plan
 ```
+
+---
+
+## Current Progress
+
+| Phase | Status | Key Files |
+|-------|--------|----------|
+| Phase 1: Environment + Data | ✅ Done | `featurize.py`, `data/tox21.csv` |
+| Phase 2: Featurization + Split | ✅ Done | `featurize.py`, `scaffold_split.py` |
+| Phase 3: Geometric Imbalance | ✅ Done | `geometric_imbalance.py`, `focal_loss.py` |
+| Phase 4: ToxNet Training | ✅ Done | `model.py`, `train.py` |
+| Phase 5: Evaluation | ⬜ Next | `evaluate.py` |
+| Phase 6: Prescription Pipeline | ⬜ Pending | `prescription_pipeline.py` |
+| Phase 7: Dashboard | ⬜ Pending | `app.py` |
 
 ---
 
@@ -337,7 +352,7 @@ PDS_exp10/
 
 ### Prerequisites
 
-- [Anaconda](https://www.anaconda.com/products/distribution) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
+- Python 3.10+ (tested on 3.11.9)
 - Git
 
 ### Installation
@@ -347,15 +362,18 @@ PDS_exp10/
 git clone https://github.com/priyali01/ToxIntel.git
 cd ToxIntel
 
-# Create and activate the Conda environment
-# (RDKit CANNOT be pip-installed — Conda is mandatory)
-conda env create -f environment.yml
-conda activate tox21_env
+# Create and activate virtual environment
+python -m venv venv
+venv\Scripts\activate          # Windows
+# source venv/bin/activate     # Mac/Linux
+
+# Install dependencies
+pip install -r requirements.txt
 
 # Verify installation
-python -c "from rdkit import Chem; print('✅ RDKit OK')"
-python -c "import torch; print(f'✅ PyTorch {torch.__version__}')"
-python -c "import streamlit; print('✅ Streamlit OK')"
+python -c "from rdkit import Chem; print('RDKit OK')"
+python -c "import torch; print(f'PyTorch {torch.__version__}')"
+python -c "import streamlit; print('Streamlit OK')"
 ```
 
 ### Running the Dashboard
@@ -366,8 +384,11 @@ streamlit run app.py
 
 ### Running the Notebooks
 
+Notebooks use the `# %%` cell format (compatible with VS Code and Jupyter).
+
 ```bash
-jupyter notebook notebooks/01_EDA.ipynb
+# Run in VS Code: Open .py file → "Run Cell" buttons appear automatically
+# Or convert to .ipynb: jupytext --to notebook notebooks/01_EDA.py
 ```
 
 ---
