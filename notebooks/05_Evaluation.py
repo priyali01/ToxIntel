@@ -28,6 +28,7 @@ from src.model import ToxNet, load_toxnet
 from src.train import prepare_data
 from src.evaluate import evaluate_all_endpoints, tune_threshold
 from src.geometric_imbalance import analyze_all_endpoints
+from src.uncertainty import MondrianToxPredictor
 
 # %% [markdown]
 # ## 1. Load Data and Best Model
@@ -173,5 +174,32 @@ for _, row in results_df.iloc[:-1].iterrows():
         if row['AUPRC'] <= prev:
             print(f"[WARNING] Endpoint {row['Endpoint']} AUPRC ({row['AUPRC']}) did not beat prevalence ({prev:.4f})")
 print("[SUCCESS] Baseline beat check completed")
+
+# %% [markdown]
+# ## 7. Model Serialization Bundle (Fix #4 & Fix #3)
+# 
+# We fit the MondrianToxPredictor on the calibration split, then package the model, the thresholds, and the predictor into a single `model_artifact.pkl` for deployment.
+
+# %%
+print("\n=== Fitting Mondrian Conformal Predictor ===")
+mondrian_predictor = MondrianToxPredictor(model, n_tasks=12, alpha=0.1)
+mondrian_predictor.fit_calibration(X_calib, Y_calib, smiles_calib)
+print("[SUCCESS] Mondrian calibration fitted")
+
+print("\n=== Saving Model Serialization Bundle ===")
+import pickle
+
+artifact = {
+    'model_state': model.state_dict(),
+    'thresholds': {c['Endpoint']: c['Threshold'] for c in calibrations},
+    'target_cols': TARGET_COLS,
+    'mondrian_predictor': mondrian_predictor,
+    'chembl_version': 'mock_cache',
+}
+
+os.makedirs('models', exist_ok=True)
+with open('models/model_artifact.pkl', 'wb') as f:
+    pickle.dump(artifact, f)
+print("[SUCCESS] Saved models/model_artifact.pkl")
 
 print("\n[INFO] Phase 5 Complete! Move to Phase 6.")

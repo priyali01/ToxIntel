@@ -18,6 +18,12 @@ TARGET_COLS = [
 ]
 
 
+from rdkit.Chem.SaltRemover import SaltRemover
+from rdkit.Chem.MolStandardize import rdMolStandardize
+
+_remover = SaltRemover()
+_normalizer = rdMolStandardize.Normalizer()
+
 def validate_smiles(smiles_list: list) -> tuple:
     """
     Check every SMILES string using RDKit. Drop any that RDKit cannot parse.
@@ -40,7 +46,11 @@ def validate_smiles(smiles_list: list) -> tuple:
     for i, smi in enumerate(smiles_list):
         mol = Chem.MolFromSmiles(smi)
         if mol is not None:
-            valid_indices.append(i)
+            # Strip salts and normalize
+            mol = _remover.StripMol(mol, dontRemoveEverything=True)
+            mol = _normalizer.normalize(mol)
+            canon_smi = Chem.MolToSmiles(mol)
+            valid_indices.append((i, canon_smi))
         else:
             invalid_records.append((i, smi))
 
@@ -50,7 +60,11 @@ def validate_smiles(smiles_list: list) -> tuple:
             print(f"  Row {idx}: '{smi[:50]}'")
 
     print(f"VALID: {len(valid_indices)}/{len(smiles_list)} SMILES passed validation")
-    return valid_indices, invalid_records
+    
+    # Unpack indices and standardized SMILES
+    val_idx = [x[0] for x in valid_indices]
+    val_smi = [x[1] for x in valid_indices]
+    return val_idx, val_smi, invalid_records
 
 
 def load_and_clean_tox21(csv_path: str = 'data/tox21.csv') -> pd.DataFrame:
@@ -72,15 +86,21 @@ def load_and_clean_tox21(csv_path: str = 'data/tox21.csv') -> pd.DataFrame:
     df = pd.read_csv(csv_path)
     print(f"Raw dataset: {df.shape[0]} compounds, {df.shape[1]} columns")
 
-    # Validate SMILES — drop any that RDKit can't parse
-    valid_idx, invalid = validate_smiles(df['smiles'].tolist())
-    df = df.iloc[valid_idx].reset_index(drop=True)
-
+    # Validate SMILES — drop any that RDKit can't parse, and return standardized SMILES
+    valid_idx, val_smi, invalid = validate_smiles(df['smiles'].tolist())
+    df = df.iloc[valid_idx].copy()
+    df['canonical_smiles'] = val_smi
+    
     # Replace NaN labels with -1 sentinel
-    # NaN means "this compound was not tested for this endpoint"
-    # We use -1 so we can mask these during training (Focal Loss ignores -1)
     for col in TARGET_COLS:
         df[col] = df[col].fillna(-1).astype(int)
+        
+    # Fix 2: Deduplication
+    # Sort by toxicity (toxic rows float to top) and keep first to preserve conservative toxic labels
+    df = df.sort_values(TARGET_COLS, ascending=False)
+    df = df.drop_duplicates(subset='canonical_smiles', keep='first').reset_index(drop=True)
+    df['smiles'] = df['canonical_smiles'] # Overwrite smiles with canonical
+    df = df.drop(columns=['canonical_smiles'])
 
     # Print summary
     print(f"\nCleaned dataset: {df.shape[0]} compounds")

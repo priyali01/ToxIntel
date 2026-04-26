@@ -26,7 +26,7 @@ from src.train import prepare_data, train_model, run_optuna_search
 
 # %%
 # Prepare data (load, featurize, scaffold split)
-X_train, Y_train, X_val, Y_val, X_test, Y_test, pos_weights = prepare_data()
+X_train, Y_train, X_val, Y_val, X_calib, Y_calib, X_test, Y_test, pos_weights, smiles_calib = prepare_data()
 
 # %% [markdown]
 # ## 1. ToxNet Architecture

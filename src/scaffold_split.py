@@ -41,8 +41,8 @@ def get_scaffold(smiles: str) -> str:
     return scaffold
 
 
-def scaffold_split(smiles_list: list, train_frac: float = 0.8,
-                   val_frac: float = 0.1, test_frac: float = 0.1,
+def scaffold_split(smiles_list: list, train_frac: float = 0.7,
+                   val_frac: float = 0.1, calib_frac: float = 0.1, test_frac: float = 0.1,
                    seed: int = 42) -> tuple:
     """
     Split molecule indices by Murcko scaffold.
@@ -58,15 +58,16 @@ def scaffold_split(smiles_list: list, train_frac: float = 0.8,
 
     Args:
         smiles_list: List of SMILES strings
-        train_frac: Fraction for training (default 0.8 = 80%)
-        val_frac: Fraction for validation (default 0.1 = 10%)
-        test_frac: Fraction for testing (default 0.1 = 10%)
+        train_frac: Fraction for training (default 0.7)
+        val_frac: Fraction for validation (default 0.1)
+        calib_frac: Fraction for Mondrian calibration (default 0.1)
+        test_frac: Fraction for testing (default 0.1)
         seed: Random seed for reproducibility
 
     Returns:
-        (train_indices, val_indices, test_indices) — lists of integer indices
+        (train_indices, val_indices, calib_indices, test_indices) — lists of integer indices
     """
-    assert abs(train_frac + val_frac + test_frac - 1.0) < 1e-6, \
+    assert abs(train_frac + val_frac + calib_frac + test_frac - 1.0) < 1e-6, \
         "Fractions must sum to 1.0"
 
     # Step 1: Group molecule indices by scaffold
@@ -86,9 +87,11 @@ def scaffold_split(smiles_list: list, train_frac: float = 0.8,
     n_total = len(smiles_list)
     n_train = int(n_total * train_frac)
     n_val = int(n_total * val_frac)
+    n_calib = int(n_total * calib_frac)
 
     train_indices = []
     val_indices = []
+    calib_indices = []
     test_indices = []
 
     for group in scaffold_groups:
@@ -96,6 +99,8 @@ def scaffold_split(smiles_list: list, train_frac: float = 0.8,
             train_indices.extend(group)
         elif len(val_indices) < n_val:
             val_indices.extend(group)
+        elif len(calib_indices) < n_calib:
+            calib_indices.extend(group)
         else:
             test_indices.extend(group)
 
@@ -103,18 +108,23 @@ def scaffold_split(smiles_list: list, train_frac: float = 0.8,
     print(f"  Unique scaffolds: {len(scaffold_to_indices)}")
     print(f"  Train: {len(train_indices):,} ({len(train_indices)/n_total*100:.1f}%)")
     print(f"  Val:   {len(val_indices):,} ({len(val_indices)/n_total*100:.1f}%)")
+    print(f"  Calib: {len(calib_indices):,} ({len(calib_indices)/n_total*100:.1f}%)")
     print(f"  Test:  {len(test_indices):,} ({len(test_indices)/n_total*100:.1f}%)")
 
     # Verify no overlap
     train_set = set(train_indices)
     val_set = set(val_indices)
+    calib_set = set(calib_indices)
     test_set = set(test_indices)
     assert len(train_set & val_set) == 0, "Train/Val overlap detected!"
+    assert len(train_set & calib_set) == 0, "Train/Calib overlap detected!"
     assert len(train_set & test_set) == 0, "Train/Test overlap detected!"
+    assert len(val_set & calib_set) == 0, "Val/Calib overlap detected!"
     assert len(val_set & test_set) == 0, "Val/Test overlap detected!"
+    assert len(calib_set & test_set) == 0, "Calib/Test overlap detected!"
     print(f"  Overlap check: PASSED (no structural leakage)")
 
-    return train_indices, val_indices, test_indices
+    return train_indices, val_indices, calib_indices, test_indices
 
 
 # ── Run when called directly (for quick testing) ──────────────────
@@ -124,8 +134,8 @@ if __name__ == '__main__':
     df = load_and_clean_tox21()
 
     print("\n--- Phase 2: Scaffold Split Test ---")
-    train_idx, val_idx, test_idx = scaffold_split(
-        df['smiles'].tolist(), train_frac=0.8, val_frac=0.1, test_frac=0.1
+    train_idx, val_idx, calib_idx, test_idx = scaffold_split(
+        df['smiles'].tolist(), train_frac=0.7, val_frac=0.1, calib_frac=0.1, test_frac=0.1
     )
 
     # Show scaffold examples

@@ -38,14 +38,14 @@ def prepare_data(method: str = 'ecfp4_2048'):
     Load, featurize, and split the Tox21 dataset.
 
     Returns:
-        X_train, Y_train, X_val, Y_val, X_test, Y_test, pos_weights
-        All as numpy arrays.
+        X_train, Y_train, X_val, Y_val, X_calib, Y_calib, X_test, Y_test, pos_weights, smiles_calib
+        All as numpy arrays or lists.
     """
     # Load and clean
     df = load_and_clean_tox21()
 
     # Scaffold split
-    train_idx, val_idx, test_idx = scaffold_split(df['smiles'].tolist())
+    train_idx, val_idx, calib_idx, test_idx = scaffold_split(df['smiles'].tolist(), train_frac=0.7, val_frac=0.1, calib_frac=0.1, test_frac=0.1)
 
     # Featurize
     print(f"\nFeaturizing with {method}...")
@@ -56,7 +56,10 @@ def prepare_data(method: str = 'ecfp4_2048'):
     # Split
     X_train, Y_train = X_all[train_idx], Y_all[train_idx]
     X_val, Y_val = X_all[val_idx], Y_all[val_idx]
+    X_calib, Y_calib = X_all[calib_idx], Y_all[calib_idx]
     X_test, Y_test = X_all[test_idx], Y_all[test_idx]
+    
+    smiles_calib = [all_smiles[i] for i in calib_idx]
 
     # Compute class weights from training set only
     df_train = df.iloc[train_idx]
@@ -65,9 +68,10 @@ def prepare_data(method: str = 'ecfp4_2048'):
     print(f"\nData prepared:")
     print(f"  Train: {X_train.shape}")
     print(f"  Val:   {X_val.shape}")
+    print(f"  Calib: {X_calib.shape}")
     print(f"  Test:  {X_test.shape}")
 
-    return X_train, Y_train, X_val, Y_val, X_test, Y_test, pos_weights
+    return X_train, Y_train, X_val, Y_val, X_calib, Y_calib, X_test, Y_test, pos_weights, smiles_calib
 
 
 def compute_macro_auprc(y_true: np.ndarray, y_prob: np.ndarray) -> float:
@@ -278,7 +282,7 @@ if __name__ == '__main__':
     print("--- Phase 4: Training Pipeline Test ---\n")
 
     # Prepare data
-    X_train, Y_train, X_val, Y_val, X_test, Y_test, pos_weights = prepare_data()
+    X_train, Y_train, X_val, Y_val, X_calib, Y_calib, X_test, Y_test, pos_weights, smiles_calib = prepare_data()
 
     # Quick training test (5 epochs, no OPTUNA)
     print("\n--- Quick Training Test (5 epochs) ---")
