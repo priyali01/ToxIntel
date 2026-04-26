@@ -119,37 +119,27 @@ tox21_project/
 
 ---
 
-## 6. Conda Environment  *(Used for all AI/ML work)*
+## 6. Python Environment  *(venv + pip)*
 
-```yaml
-name: tox21_env
-channels:
-  - conda-forge
-  - defaults
-dependencies:
-  - python=3.10
-  - rdkit
-  - numpy
-  - pandas
-  - scikit-learn
-  - matplotlib
-  - seaborn
-  - pip
-  - pip:
-    - imbalanced-learn
-    - xgboost
-    - lightgbm
-    - optuna
-    - shap
-    - torch
-    - torchvision
-    - skorch
-    - streamlit
-    - plotly
-    - chembl-webresource-client
-    - mapie
-    - deepchem
+```bash
+# Create virtual environment
+python -m venv venv
+
+# Activate it
+venv\Scripts\activate          # Windows
+# source venv/bin/activate     # Mac/Linux
+
+# Install all dependencies
+pip install -r requirements.txt
 ```
+
+All dependencies are in `requirements.txt`, organized by purpose:
+- **Chemistry:** `rdkit` (SMILES, fingerprints, scaffolds, SAScore, alerts)
+- **ML:** `torch`, `scikit-learn`, `optuna`, `imbalanced-learn`
+- **Explainability:** `shap`
+- **Uncertainty:** `mapie` (conformal prediction)
+- **Dashboard:** `streamlit`, `plotly`
+- **Data:** `pandas`, `numpy`, `matplotlib`, `seaborn`
 
 ---
 

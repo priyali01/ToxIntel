@@ -1,0 +1,35 @@
+# ===== Core Chemistry =====
+rdkit                              # SMILES validation, fingerprints, scaffolds, SAScore, alerts
+
+# ===== Data & ML =====
+numpy
+pandas
+scikit-learn
+imbalanced-learn                   # ADASYN + TomekLinks (SMOTE in embedding space)
+
+# ===== Deep Learning =====
+torch
+torchvision
+
+# ===== Hyperparameter Tuning =====
+optuna
+
+# ===== Explainability =====
+shap
+
+# ===== Uncertainty & Calibration =====
+mapie                              # Conformal prediction intervals
+
+# ===== Bioisostere Database =====
+chembl-webresource-client          # One-time offline cache builder
+
+# ===== Dashboard =====
+streamlit
+plotly
+
+# ===== Visualization =====
+matplotlib
+seaborn
+
+# ===== Notebooks =====
+jupyter
