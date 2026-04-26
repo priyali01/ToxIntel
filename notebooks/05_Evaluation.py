@@ -35,7 +35,7 @@ from src.uncertainty import MondrianToxPredictor
 
 # %%
 # Load data identical to Phase 4
-X_train, Y_train, X_val, Y_val, X_test, Y_test, pos_weights = prepare_data()
+X_train, Y_train, X_val, Y_val, X_calib, Y_calib, X_test, Y_test, pos_weights, smiles_calib = prepare_data()
 
 # Initialize model and load weights robustly
 try:

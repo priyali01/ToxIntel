@@ -6,7 +6,7 @@ from rdkit.Chem import AllChem
 from rdkit.Chem.Scaffolds import MurckoScaffold
 from sklearn.base import BaseEstimator, ClassifierMixin
 
-from mapie.classification import MapieClassifier
+from mapie.classification import SplitConformalClassifier
 from mapie.conformity_scores import LACConformityScore
 
 def get_scaffold(smiles: str) -> str:
@@ -80,8 +80,8 @@ class MondrianToxPredictor:
             for group in ['known', 'similar', 'novel']:
                 mask = (groups == group) & valid_mask
                 if mask.sum() > 10: # Need enough calibration points
-                    mapie = MapieClassifier(estimator=wrapper, cv='prefit', conformity_score=LACConformityScore())
-                    mapie.fit(X_cal[mask], y_cal[mask, ep])
+                    mapie = SplitConformalClassifier(estimator=wrapper, prefit=True, conformity_score=LACConformityScore())
+                    mapie.conformalize(X_cal[mask], y_cal[mask, ep])
                     self.mapie_models[ep][group] = mapie
         return self
         
@@ -98,13 +98,13 @@ class MondrianToxPredictor:
             
             mapie = self.mapie_models[ep].get(group)
             if mapie:
-                # predict returns y_pred, y_pis
-                _, y_pis = mapie.predict(X, alpha=self.alpha)
+                # predict_set returns y_pred, y_pis
+                _, y_pis = mapie.predict_set(X)
                 # y_pis shape: (n_samples, n_classes, n_alphas)
                 # It tells us which classes are in the prediction set.
                 # If both classes are in the set [True, True], uncertainty is high.
                 pred_set = y_pis[0, :, 0] 
-                uncertain = pred_set[0] and pred_set[1]
+                uncertain = bool(pred_set[0] and pred_set[1])
             else:
                 uncertain = True # Fallback if no calibration data for this group
                 

@@ -22,6 +22,7 @@ from rdkit import Chem
 from rdkit.Chem import Draw
 from IPython.display import display
 
+import pickle
 from src.model import ToxNet, load_toxnet
 from src.featurize import load_and_clean_tox21
 from src.prescription_pipeline import run_prescription_pipeline
@@ -36,14 +37,17 @@ df = load_and_clean_tox21()
 # Take a random sample of 500 training smiles for fast OOD checking
 train_smiles_sample = df['smiles'].sample(500, random_state=42).tolist()
 
-# Load the trained ToxNet model robustly
+# Load the model artifact bundle
 try:
-    model = load_toxnet('models/toxnet_final.pt', input_dim=2048)
-    print("[SUCCESS] Successfully loaded models/toxnet_final.pt")
+    with open('models/model_artifact.pkl', 'rb') as f:
+        model_artifact = pickle.load(f)
+    print("[SUCCESS] Successfully loaded models/model_artifact.pkl")
 except Exception as e:
-    print(f"[ERROR] Failed to load model weights: {e}")
-
-model.eval()
+    print(f"[ERROR] Failed to load model artifact: {e}")
+    # Fallback for dev if needed
+    model = load_toxnet('models/toxnet_final.pt', input_dim=2048)
+    model.eval()
+    model_artifact = {'mondrian_predictor': type('dummy', (), {'base_model': model})()}
 
 # %% [markdown]
 # ## 2. Execute the Pipeline on a Toxic Target
@@ -59,7 +63,7 @@ mol = Chem.MolFromSmiles(target_smiles)
 display(Draw.MolToImage(mol, size=(200, 200)))
 
 # Run the 4-step pipeline
-results = run_prescription_pipeline(target_smiles, model, training_smiles_list=train_smiles_sample)
+results = run_prescription_pipeline(target_smiles, model_artifact)
 
 # %% [markdown]
 # ## 3. Review the Output Pareto Front

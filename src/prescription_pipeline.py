@@ -4,7 +4,6 @@ from rdkit import Chem
 from src.featurize import smiles_to_morgan_with_info, TARGET_COLS
 from src.shap_validator import validate_shap_attribution, get_top_shap_bits, load_structural_alerts
 from src.bioisostere import get_bioisostere_replacements, load_mock_chembl_cache
-from src.uncertainty import apply_temperature_scaling, detect_ood
 from src.pareto import evaluate_swap_pareto
 
 # For a real implementation we would use shap.DeepExplainer.
@@ -23,9 +22,9 @@ def simulate_shap_values(probs, bit_info=None):
             shap_vals[bit] = 10.0
     return shap_vals
 
-def run_prescription_pipeline(target_smiles, model, training_smiles_list=None):
+def run_prescription_pipeline(target_smiles, model_artifact):
     """
-    Executes the 4-Step Corrected Flow for a single molecule.
+    Executes the 4-Step Corrected Flow for a single molecule using the serialized model artifact.
     """
     print(f"\n--- Starting Prescription Pipeline for {target_smiles} ---")
     mol = Chem.MolFromSmiles(target_smiles)
@@ -35,6 +34,9 @@ def run_prescription_pipeline(target_smiles, model, training_smiles_list=None):
     alerts_cache = load_structural_alerts()
     bio_cache = load_mock_chembl_cache()
     
+    model = model_artifact['mondrian_predictor'].base_model
+    mondrian = model_artifact['mondrian_predictor']
+    
     # ---------------------------------------------------------
     # STEP 1: Predict & SHAP Attribution
     # ---------------------------------------------------------
@@ -42,14 +44,16 @@ def run_prescription_pipeline(target_smiles, model, training_smiles_list=None):
     if fp is None:
         return {'error': 'Featurization failed'}
         
-    with torch.no_grad():
-        logits = model(torch.tensor(fp, dtype=torch.float32).unsqueeze(0))
-        orig_probs = apply_temperature_scaling(logits)[0]
+    orig_results = mondrian.predict_with_uncertainty(target_smiles, fp)
+    orig_probs = np.array([r['prob'] for r in orig_results])
         
-    print("\n[Step 1] Initial Predictions:")
-    for ep, p in zip(TARGET_COLS, orig_probs):
+    print("\n[Step 1] Initial Predictions (Mondrian Calibrated):")
+    for ep, r in zip(TARGET_COLS, orig_results):
+        p = r['prob']
+        u = r['uncertain']
+        g = r['mondrian_group']
         if p > 0.5:
-            print(f"  [TOXIC] {ep}: {p:.4f}")
+            print(f"  [TOXIC] {ep}: {p:.4f} (Uncertain: {u}, Group: {g})")
             
     # Simulate SHAP values for the most toxic endpoint
     most_toxic_idx = np.argmax(orig_probs)
@@ -94,15 +98,15 @@ def run_prescription_pipeline(target_smiles, model, training_smiles_list=None):
     for sug in suggestions:
         sug_fp, _ = smiles_to_morgan_with_info(sug['smiles'])
         
-        with torch.no_grad():
-            sug_logits = model(torch.tensor(sug_fp, dtype=torch.float32).unsqueeze(0))
-            sug_probs = apply_temperature_scaling(sug_logits)[0]
+        sug_results = mondrian.predict_with_uncertainty(sug['smiles'], sug_fp)
+        sug_probs = np.array([r['prob'] for r in sug_results])
             
         pareto = evaluate_swap_pareto(orig_probs, sug_probs, TARGET_COLS)
         
-        ood_info = None
-        if training_smiles_list:
-            ood_info = detect_ood(sug['smiles'], training_smiles_list)
+        # We consider the molecule OOD if it is in the 'novel' group
+        # or if the predictions are highly uncertain.
+        is_novel = sug_results[0]['mondrian_group'] == 'novel'
+        highly_uncertain = sum([1 for r in sug_results if r['uncertain']]) > 6
             
         results.append({
             'smiles': sug['smiles'],
@@ -112,13 +116,14 @@ def run_prescription_pipeline(target_smiles, model, training_smiles_list=None):
             'worsened': pareto['worsened_count'],
             'sa_score': sug['sa_score'],
             'delta_logp': sug['delta_logp'],
-            'ood_warning': ood_info['is_ood'] if ood_info else False
+            'ood_warning': is_novel or highly_uncertain,
+            'mondrian_group': sug_results[0]['mondrian_group']
         })
         
         print(f"  Candidate: {sug['smiles']}")
         print(f"    Status: {pareto['status']} | Improved: {pareto['improved_count']} | Worsened: {pareto['worsened_count']}")
-        if ood_info and ood_info['is_ood']:
-            print(f"    [OOD WARNING] (Max Sim to Train: {ood_info['max_sim']})")
+        if is_novel or highly_uncertain:
+            print(f"    [OOD WARNING] Mondrian Group: {sug_results[0]['mondrian_group']}")
             
     print("\n--- Pipeline Finished ---")
     return {
