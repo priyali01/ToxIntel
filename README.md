@@ -48,7 +48,7 @@ ToxIntel is not a standard toxicity classifier. It is a **Prediction-to-Prescrip
 |-------------|------------------|----------|
 | Endpoint coverage | Single toxicity score | All 12 Tox21 endpoints simultaneously |
 | Output format | Point estimate (e.g., "73% toxic") | Pareto front across 12 dimensions |
-| Uncertainty | None | Temperature-scaled calibrated intervals + OOD flag |
+| Uncertainty | None | Mondrian Conformal Prediction (90% coverage) + OOD flag |
 | Synthesizability | Not considered | SAScore < 4.0 gate on all bioisostere suggestions |
 | Attribution validation | SHAP only | SHAP × structural alert overlay (Brenk + PAINS) |
 | Scope declaration | Implicit | Explicitly declared (in-vitro only, no efficacy model) |
@@ -117,10 +117,13 @@ Input: SMILES String
     │
     ▼
 ┌────────────────────────────────────────────────────────────┐
-│  Phase 7: Streamlit Dashboard                               │
-│  • Molecule viewer with SHAP atom heatmap                  │
-│  • 12-axis radar chart + Pareto candidate table            │
-│  • Uncertainty bands + OOD warnings + scope disclaimer     │
+│  Phase 7: Streamlit Dashboard (ToxIntel™)                   │
+│  • Molecular identity + descriptor panel                   │
+│  • 12-axis radar chart + safety threshold overlay          │
+│  • Per-endpoint breakdown table (status + uncertainty)     │
+│  • Bioisostere prescription engine with Pareto ranking     │
+│  • Side-by-side comparison view (original vs candidate)    │
+│  • Mondrian OOD warnings + reliability signals             │
 └────────────────────────────────────────────────────────────┘
 ```
 
@@ -319,12 +322,13 @@ PDS_exp10/
 │   ├── shap_validator.py            # SHAP × structural alert cross-validation
 │   ├── bioisostere.py               # ChEMBL query + SAScore filter
 │   ├── pareto.py                    # Pareto dominance evaluation
-│   ├── uncertainty.py               # Temperature scaling + OOD detection
+│   ├── uncertainty.py               # Mondrian Conformal Prediction + OOD detection
 │   └── prescription_pipeline.py     # Full corrected 4-step pipeline
 ├── models/
-│   └── toxnet_final.pt              # Trained ToxNet weights (2.96M parameters)
+│   ├── toxnet_final.pt              # Trained ToxNet weights (2.96M parameters)
+│   └── model_artifact.pkl           # Bundled artifact (weights + thresholds + Mondrian predictor)
 ├── Documents/                       # Research specs, literature, build session logs
-├── app.py                           # Streamlit dashboard
+├── app.py                           # ToxIntel™ Streamlit dashboard (Phase 7)
 ├── requirements.txt                 # pip dependencies
 ├── .gitignore
 └── plan.md                          # Master implementation plan
@@ -342,7 +346,7 @@ PDS_exp10/
 | Phase 4: ToxNet Training | ✅ Done | `model.py`, `train.py` |
 | Phase 5: Evaluation | ✅ Done | `evaluate.py`, `05_Evaluation.ipynb` |
 | Phase 6: Prescription Pipeline | ✅ Done | `prescription_pipeline.py`, `06_Prescription.ipynb` |
-| Phase 7: Dashboard | ⬜ Next | `app.py` |
+| Phase 7: Dashboard | ✅ Done | `app.py` |
 
 ---
 
@@ -380,6 +384,16 @@ python -c "import streamlit; print('Streamlit OK')"
 streamlit run app.py
 ```
 
+The **ToxIntel™ Dashboard** includes:
+- **Molecular Identity Panel** — Structure visualization + MW, LogP, HBD, HBA, TPSA, RotBonds
+- **Reliability & OOD Signals** — Mondrian Conformal group badge (Known / Similar / Novel) + uncertainty count
+- **12-Axis Toxicity Radar** — With per-endpoint safety threshold overlay (dashed line)
+- **Per-Endpoint Breakdown Table** — Probability, threshold, TOXIC/CAUTION/SAFE status, uncertainty flag
+- **Bioisostere Prescription Engine** — Pareto-ranked candidates with Dominant / Trade-off / Dominated counts
+- **Side-by-Side Comparison View** — Original vs. candidate molecule images + overlaid radar + delta table
+- **Net Safety Gain Metrics** — Aggregate improvement score + relative % + candidate Mondrian group
+- **System Insights Footer** — Model architecture, loss function, calibration method
+
 ### Running the Notebooks
 
 All notebooks are available as `.ipynb` files. Open them in Jupyter or VS Code:
@@ -414,7 +428,7 @@ jupyter nbconvert --to notebook --execute notebooks/01_EDA.ipynb --inplace
 | Evaluation | scikit-learn | AUPRC (primary), AUROC, F1, MCC, precision-recall curves |
 | Explainability | SHAP | DeepExplainer → bit-level attribution → atom-level mapping |
 | Bioisostere DB | chembl-webresource-client | Offline cache of fragment replacements |
-| Uncertainty | SciPy, MAPIE | Temperature scaling + conformal prediction |
+| Uncertainty | MAPIE | Mondrian Conformal Prediction (90% coverage guarantee) |
 | Dashboard | Streamlit + Plotly | Interactive UI, radar charts, Pareto tables |
 | Visualization | Matplotlib, Seaborn, Plotly | Heatmaps, PR curves, cohesion plots |
 | Notebook Tooling | jupytext, nbconvert | .py ↔ .ipynb conversion and headless execution |
