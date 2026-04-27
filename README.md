@@ -75,9 +75,9 @@ Input: SMILES String
 └────────────────────────────────────────────────────────────┘
     │
     ▼
-┌────────────────────────────────────────────────────────────┐
 │  Phase 2: Multi-Representation Featurization                │
-│  • Ablation: ECFP4 / ECFP6 / MACCS / RDKit / ECFP+Desc    │
+│  • Ablation: ECFP4 / ECFP6 / MACCS / RDKit / ecfp4_desc    │
+│  • Selection: ecfp4_desc (Morgan + 10 Descriptors)         │
 │  • Murcko scaffold-stratified split (prevents leakage)     │
 └────────────────────────────────────────────────────────────┘
     │
@@ -91,10 +91,11 @@ Input: SMILES String
     │
     ▼
 ┌────────────────────────────────────────────────────────────┐
-│  Phase 4: ToxNet Training                                   │
-│  • Shared backbone [1024→512→256] + 12 task heads          │
-│  • OPTUNA hyperparameter search (50 trials, maximize AUPRC)│
-│  • Masked Focal Loss for NaN labels                        │
+│  Phase 4: ToxNet Training (v2)                             │
+│  • Shared backbone [2058→1024→512→512→256] + 12 heads      │
+│  • LR Warmup (25 eps) + Cosine Annealing + Grad Clipping   │
+│  • n_epochs=300, patience=35 (maximizes convergence)       │
+│  • OPTUNA hyperparameter search (maximize Macro AUPRC)     │
 └────────────────────────────────────────────────────────────┘
     │
     ▼
@@ -169,10 +170,11 @@ We empirically compare five molecular representations — a systematic compariso
 | Representation | Bits | Description |
 |---------------|------|-------------|
 | ECFP4_1024 | 1,024 | Morgan circular fingerprint (radius=2) |
-| **ECFP4_2048** | **2,048** | **Selected representation** — compatible with SHAP attribution |
+| ECFP4_2048 | 2,048 | Morgan circular fingerprint (radius=2) |
 | ECFP6_2048 | 2,048 | Morgan circular fingerprint (radius=3) |
 | MACCS | 166 | Structural key fingerprint |
-| ECFP4+Desc | 2,048 + n | ECFP4 concatenated with RDKit descriptors (requires StandardScaler) |
+| RDKit_Desc | 10 | 10 Physicochemical descriptors (MW, LogP, etc.) |
+| **ecfp4_desc** | **2,058** | **Final Selection** — ECFP4 (2048) + 10 Descriptors |
 
 > **Critical:** `bitInfo={}` must be declared outside the function call to preserve atom-to-bit mapping for SHAP interpretation in Phase 6.
 
@@ -209,18 +211,18 @@ We quantify this using **intraclass Tanimoto cohesion** — the mean pairwise Ta
 ### ToxNet Architecture
 
 ```
-Input (batch, 2048)
+Input (batch, 2058)
     │
     ▼
-Shared Backbone:
-    Linear(2048→1024) → BatchNorm → GELU → Dropout(0.3)
-    Linear(1024→512)  → BatchNorm → GELU → Dropout(0.3)
-    Linear(512→256)   → BatchNorm → GELU → Dropout(0.3)
+Shared Backbone (Large):
+    Linear(2058→1024) → BatchNorm → GELU → Dropout(0.4)
+    Linear(1024→512)  → BatchNorm → GELU → Dropout(0.4)
+    Linear(512→512)   → BatchNorm → GELU → Dropout(0.4)
+    Linear(512→256)   → BatchNorm → GELU → Dropout(0.4)
     │
-    ├── Head 1: Linear(256→64) → ReLU → Dropout(0.15) → Linear(64→1)  → NR-AR
-    ├── Head 2: Linear(256→64) → ReLU → Dropout(0.15) → Linear(64→1)  → NR-AR-LBD
+    ├── Head 1: Linear(256→128) → ReLU → Dropout(0.15) → Linear(128→1) → NR-AR
     ├── ...
-    └── Head 12: Linear(256→64) → ReLU → Dropout(0.15) → Linear(64→1) → SR-p53
+    └── Head 12: Linear(256→128) → ReLU → Dropout(0.15) → Linear(128→1) → SR-p53
 
 Output: (batch, 12) logits
 ```
@@ -244,8 +246,9 @@ Output: (batch, 12) logits
 | Model | Expected Macro AUPRC | Expected Macro AUROC |
 |-------|:---:|:---:|
 | Logistic Regression (baseline) | 0.20–0.28 | 0.72–0.76 |
-| XGBoost + ECFP4 | 0.35–0.45 | 0.82–0.86 |
-| **ToxNet + Focal Loss + OPTUNA** | **0.42–0.52** | **0.84–0.88** |
+| XGBoost + ECFP4 | 0.35 | 0.82 |
+| **ToxNet + ecfp4_desc (Stable)** | **0.364** | **0.842** |
+| Target (Full search) | 0.40+ | 0.86+ |
 
 ---
 
@@ -323,7 +326,8 @@ PDS_exp10/
 │   ├── bioisostere.py               # ChEMBL query + SAScore filter
 │   ├── pareto.py                    # Pareto dominance evaluation
 │   ├── uncertainty.py               # Mondrian Conformal Prediction + OOD detection
-│   └── prescription_pipeline.py     # Full corrected 4-step pipeline
+│   ├── prescription_pipeline.py     # Full corrected 4-step pipeline
+│   └── retrain_best.py              # Final training script (v2 parameters)
 ├── models/
 │   ├── toxnet_final.pt              # Trained ToxNet weights (2.96M parameters)
 │   └── model_artifact.pkl           # Bundled artifact (weights + thresholds + Mondrian predictor)
@@ -347,6 +351,7 @@ PDS_exp10/
 | Phase 5: Evaluation | ✅ Done | `evaluate.py`, `05_Evaluation.ipynb` |
 | Phase 6: Prescription Pipeline | ✅ Done | `prescription_pipeline.py`, `06_Prescription.ipynb` |
 | Phase 7: Dashboard | ✅ Done | `app.py` |
+| **Model Stability (v2)** | ✅ Achieved | `retrain_best.py` (AUPRC ~0.364) |
 
 ---
 
