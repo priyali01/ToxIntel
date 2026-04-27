@@ -364,9 +364,9 @@ def run_full_training(best_params, X_train, Y_train, X_val, Y_val,
         weight_decay=best_params.get('weight_decay', 1e-4),
         head_hidden=best_params.get('head_hidden', 128),
         label_smoothing=best_params.get('label_smoothing', 0.05),
-        n_epochs=150,
-        patience=20,
-        warmup_epochs=10,
+        n_epochs=300,
+        patience=35,
+        warmup_epochs=25,
         verbose=True,
     )
 
