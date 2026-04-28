@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ToxIntel™ Research Graph Report</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px;
+            background-color: #f4f7f6;
+        }
+        .container {
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+            text-align: center;
+        }
+        h2 {
+            color: #2980b9;
+            margin-top: 40px;
+            border-left: 5px solid #3498db;
+            padding-left: 15px;
+        }
+        h3 {
+            color: #16a085;
+            margin-top: 30px;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 20px auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .takeaway {
+            background-color: #e8f4f8;
+            border-right: 4px solid #3498db;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .takeaway strong {
+            color: #2980b9;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 10px;
+        }
+        hr {
+            border: 0;
+            height: 1px;
+            background: #eee;
+            margin: 40px 0;
+        }
+        .footer {
+            text-align: center;
+            font-size: 0.9em;
+            color: #7f8c8d;
+            margin-top: 50px;
+        }
+        @media print {
+            body { background-color: #fff; padding: 0; }
+            .container { box-shadow: none; padding: 0; }
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 ToxIntel™ Research Graph Report</h1>
+        <p style="text-align: center; font-style: italic;">A Comprehensive Guide to Molecular Toxicity Analysis Visualizations</p>
+        
+        <div class="no-print" style="text-align: center; margin-bottom: 20px;">
+            <button onclick="window.print()" style="padding: 10px 20px; background-color: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                🖨️ Export to PDF / Print
+            </button>
+        </div>
+
+        <hr>
+
+        <h2>1. Exploratory Data Analysis (01_EDA.ipynb)</h2>
+        
+        <h3>A. Toxic Class Prevalence & Imbalance Severity</h3>
+        <img src="../notebooks/01_class_balance.png" alt="Toxic Class Prevalence">
+        
+        <p><strong>What it shows:</strong></p>
+        <ul>
+            <li><strong>Left Chart:</strong> The percentage of toxic molecules per endpoint. Notice how low NR-PPAR-gamma is (~2.9%).</li>
+            <li><strong>Right Chart:</strong> The imbalance ratio (Non-Toxic / Toxic). Shows how many safe molecules exist for every 1 toxic molecule.</li>
+        </ul>
+        
+        <div class="takeaway">
+            <strong>Key Takeaways:</strong>
+            <ul>
+                <li><strong>Metric Failure:</strong> Proves that standard classification metrics like Accuracy are completely invalid for this project.</li>
+                <li><strong>Algorithm Justification:</strong> Visually justifies the absolute necessity for advanced techniques like Focal Loss and AUPRC evaluation.</li>
+            </ul>
+        </div>
+
+        <h3>B. Missing Label Distribution</h3>
+        <img src="../notebooks/01_missing_labels.png" alt="Missing Labels">
+        
+        <p><strong>What it shows:</strong></p>
+        <ul>
+            <li>A bar chart detailing the percentage of missing (NaN) labels for each of the 12 biological endpoints.</li>
+        </ul>
+        
+        <div class="takeaway">
+            <strong>Key Takeaways:</strong>
+            <ul>
+                <li><strong>Data Fragmentation:</strong> Shows that up to 26% of the data is missing for some assays.</li>
+                <li><strong>Custom Loss Requirement:</strong> Justifies why we built a custom PerEndpointFocalLoss that ignores unknown data during training.</li>
+            </ul>
+        </div>
+
+        <hr>
+
+        <h2>2. Geometric Imbalance Analysis (02_Geometric_Imbalance.ipynb)</h2>
+        
+        <h3>A. Intraclass Tanimoto Cohesion & Ratio</h3>
+        <img src="../notebooks/02_geometric_imbalance.png" alt="Geometric Imbalance">
+        
+        <div class="takeaway">
+            <strong>The Core Novelty:</strong> This proves that for certain endpoints, toxic molecules are structurally clustered. Endpoints with a ratio > 1.5 (red line) suffer from "Geometric Imbalance."
+        </div>
+
+        <hr>
+
+        <h2>3. Featurization Ablation Study (03_Featurization_Ablation.ipynb)</h2>
+        
+        <h3>A. Featurization Performance Comparison</h3>
+        <img src="../notebooks/03_featurization_ablation.png" alt="Featurization Ablation">
+        
+        <h3>B. AUPRC per Endpoint Heatmap</h3>
+        <img src="../notebooks/03_endpoint_heatmap.png" alt="Endpoint Heatmap">
+
+        <hr>
+
+        <h2>4. ToxNet Training (04_Training.ipynb)</h2>
+        
+        <h3>A. Initial Training History (Sanity Check)</h3>
+        <img src="../notebooks/04_training_history.png" alt="Training History">
+        
+        <h3>B. Final Optimized Model Training</h3>
+        <img src="../notebooks/04_final_training.png" alt="Final Training">
+
+        <hr>
+
+        <h2>5. Evaluation & Calibration (05_Evaluation.ipynb)</h2>
+        
+        <h3>A. Test AUPRC vs. Geometric Cohesion Ratio</h3>
+        <img src="../notebooks/05_geometric_correlation.png" alt="Geometric Correlation">
+        
+        <div class="takeaway">
+            <strong>Proving Claim 1:</strong> Endpoints with high geometric cohesion generally generalize poorly on unseen scaffolds, resulting in lower AUPRC. This ties the entire research narrative together.
+        </div>
+
+        <div class="footer">
+            <p>© 2026 ToxIntel™ Project • Generated for Research Presentation</p>
+        </div>
+    </div>
+</body>
+</html>
