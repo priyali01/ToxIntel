@@ -282,6 +282,23 @@ yielded the highest cross-validated macro AUPRC.
 Physicochemical descriptors were normalized using a StandardScaler fitted
 strictly on the training partition to prevent data leakage.
 
+Fig.~\ref{fig_class_balance} illustrates the severe label imbalance across the
+12 endpoints, motivating the need for masked loss computation and Focal Loss.
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=3.0in]{01_class_balance.png}
+\caption{Class imbalance across the 12 Tox21 endpoints. Toxic prevalence ranges from 2.8\% (NR-PPAR-gamma) to 16.9\% (SR-ARE), justifying the use of AUPRC as the primary evaluation metric.}
+\label{fig_class_balance}
+\end{figure}
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=3.0in]{03_featurization_ablation.png}
+\caption{Featurization ablation study. The hybrid \texttt{ecfp4\_desc} representation (ECFP4 + 10 physicochemical descriptors) consistently outperforms all other featurizations in macro AUPRC.}
+\label{fig_feat_ablation}
+\end{figure}
+
 \subsection{Scaffold-Stratified Splitting}
 All experiments employed Bemis--Murcko scaffold-stratified splitting~\cite{bemis1996},
 ensuring that core ring systems in validation and test sets are disjoint from
@@ -387,6 +404,15 @@ Random Baseline       & ---          & 0.500 & $\sim$0.080 \\
 ToxNet achieves a macro AUPRC of 0.364 and macro AUROC of 0.842, representing
 a 4.5$\times$ improvement over the random baseline and a 17.4\% relative
 improvement over XGBoost in AUPRC.
+Fig.~\ref{fig_training} shows the training and validation loss curves, confirming
+stable convergence without overfitting throughout the 300-epoch training run.
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=3.0in]{04_final_training.png}
+\caption{ToxNet training and validation loss curves over 300 epochs. Cosine annealing with linear warmup ensures stable convergence. Early stopping at patience=35 prevents overfitting.}
+\label{fig_training}
+\end{figure}
 
 \subsection{Geometric Imbalance Validation}
 
@@ -405,6 +431,16 @@ failure mode.
 For the remaining six endpoints with $\rho < 1.5$, SMOTE produced
 measurable improvements ($\Delta$AUPRC up to 0.032), validating the
 cohesion ratio as a reliable pre-training augmentation efficacy predictor.
+Fig.~\ref{fig_geom_corr} plots the correlation between the per-endpoint
+cohesion ratio and the SMOTE-induced AUPRC change, providing direct
+empirical evidence for the geometric imbalance hypothesis.
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=3.0in]{05_geometric_correlation.png}
+\caption{Correlation between per-endpoint Intraclass Tanimoto Cohesion ratio and the change in AUPRC from embedding-space SMOTE. Endpoints with $\rho > 1.5$ show negligible or negative benefit from oversampling, confirming the geometric imbalance hypothesis.}
+\label{fig_geom_corr}
+\end{figure}
 
 \subsection{Prescriptive Pipeline Efficacy}
 Applied to known toxic reference compounds, ToxIntel successfully:
