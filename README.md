@@ -264,7 +264,7 @@ Step 1b: Cross-validate SHAP against Brenk + PAINS + OCHEM alerts
 
 Step 2:  Map top SHAP bit → molecular fragment (RDKit bitInfo atom mapping)
 
-Step 3:  Query ChEMBL cache for bioisostere replacements
+Step 3:  Query ChEMBL bioisosteres
          → Filter A: SAScore < 4.0 (synthesizability)
          → Filter B: |ΔLogP| < 0.5, |ΔMW| < 25 Da (ADME preservation)
          → Flag: Tanimoto to DrugBank < 0.4 (out-of-pharma-space)
@@ -272,7 +272,8 @@ Step 3:  Query ChEMBL cache for bioisostere replacements
 Step 4:  Re-predict all 12 endpoints for each candidate
          → Temperature-scaled calibrated probabilities
          → OOD detection (Tanimoto to training set)
-         → Pareto dominance: DOMINATES / TRADE-OFF / DOMINATED / NO_CHANGE
+         → Pareto dominance: DOMINATES / TRADE-OFF / DOMINATED 
+         / NO_CHANGE
          → Output: sorted Pareto front with uncertainty intervals
 ```
 
