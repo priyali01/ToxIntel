@@ -86,15 +86,15 @@ Input: SMILES String
 │  Phase 3: Geometric Imbalance Analysis ← NOVEL             │
 │  • Intraclass Tanimoto cohesion per endpoint               │
 │  • Per-endpoint Focal Loss (γ=2, masked for NaN labels)    │
-│  • SMOTE validity map (only in embedding space)            │
+│  • Geometric Refinement: Tomek Links cleanup in embedding space│
 └────────────────────────────────────────────────────────────┘
     │
     ▼
 ┌────────────────────────────────────────────────────────────┐
-│  Phase 4: ToxNet Training (v2)                             │
-│  • Shared backbone [2058→1024→512→512→256] + 12 heads      │
+│  Phase 4: Two-Pass ToxNet Training (Research Grade)        │
+│  • Pass 1: ToxNetLite (Shared-Backbone embedding expert)   │
+│  • Pass 2: ToxNet (Task-head fine-tuning on cleaned data)  │
 │  • LR Warmup (25 eps) + Cosine Annealing + Grad Clipping   │
-│  • n_epochs=300, patience=35 (maximizes convergence)       │
 │  • OPTUNA hyperparameter search (maximize Macro AUPRC)     │
 └────────────────────────────────────────────────────────────┘
     │
