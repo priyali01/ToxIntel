@@ -57,20 +57,43 @@ class ResidualBlock(nn.Module):
         return self.block(x) + self.skip(x)
 
 
+class ToxNetLite(nn.Module):
+    """
+    ToxNetLite: The shared backbone 'expert' that learns chemical embeddings.
+    This module is used in the first pass of the two-pass training strategy.
+    """
+    def __init__(self, input_dim: int = 2048, hidden_dims: list = None, dropout: float = 0.3):
+        super().__init__()
+        if hidden_dims is None:
+            hidden_dims = [1024, 512, 256]
+        
+        backbone_layers = []
+        prev_dim = input_dim
+        for dim in hidden_dims:
+            backbone_layers.append(ResidualBlock(prev_dim, dim, dropout=dropout))
+            prev_dim = dim
+            
+        self.backbone = nn.Sequential(*backbone_layers)
+        self.output_dim = hidden_dims[-1]
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.backbone(x)
+
+
 class ToxNet(nn.Module):
     """
     Multi-task neural network for simultaneous 12-endpoint toxicity prediction.
+    Utilizes a ToxNetLite backbone for feature extraction.
 
     Args:
-        input_dim:    Size of input fingerprint (default 2048 for ECFP4)
-        hidden_dims:  List of hidden layer sizes for shared backbone
-        head_hidden:  First hidden size in each task head (second = head_hidden//2)
-        dropout:      Dropout rate for shared backbone
+        backbone:     An instance of ToxNetLite or None (to create a new one)
+        head_hidden:  First hidden size in each task head
         head_dropout: Dropout rate for task heads
-        n_tasks:      Number of output endpoints (default 12 for Tox21)
+        n_tasks:      Number of output endpoints
     """
 
-    def __init__(self, input_dim: int = 2048,
+    def __init__(self, backbone: ToxNetLite = None,
+                 input_dim: int = 2048,
                  hidden_dims: list = None,
                  head_hidden: int = 128,
                  dropout: float = 0.3,
@@ -78,24 +101,19 @@ class ToxNet(nn.Module):
                  n_tasks: int = 12):
         super().__init__()
 
-        if hidden_dims is None:
-            hidden_dims = [1024, 512, 256]
-
-        # ── Shared Backbone with residual connections ──
-        backbone_layers = []
-        prev_dim = input_dim
-        for i, dim in enumerate(hidden_dims):
-            backbone_layers.append(ResidualBlock(prev_dim, dim, dropout=dropout))
-            prev_dim = dim
-
-        self.backbone = nn.Sequential(*backbone_layers)
+        # Use provided backbone or create a new one
+        if backbone is not None:
+            self.lite = backbone
+        else:
+            self.lite = ToxNetLite(input_dim=input_dim, hidden_dims=hidden_dims, dropout=dropout)
 
         # ── Task Heads — larger than v1 ──
-        # 256 → head_hidden → head_hidden//2 → 1
+        # embedding_dim → head_hidden → head_hidden//2 → 1
+        embedding_dim = self.lite.output_dim
         head_mid = max(head_hidden // 2, 32)
         self.heads = nn.ModuleList([
             nn.Sequential(
-                nn.Linear(hidden_dims[-1], head_hidden),
+                nn.Linear(embedding_dim, head_hidden),
                 nn.GELU(),
                 nn.Dropout(head_dropout),
                 nn.Linear(head_hidden, head_mid),
@@ -116,25 +134,18 @@ class ToxNet(nn.Module):
 
         self.n_tasks = n_tasks
 
+    def freeze_backbone(self, freeze: bool = True):
+        """Freezes/unfreezes the backbone for the second pass of training."""
+        for param in self.lite.parameters():
+            param.requires_grad = not freeze
+
     def get_embeddings(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Extract shared backbone embeddings (before task heads).
-        Used for t-SNE, OOD detection, and SHAP analysis.
-        Returns tensor of shape (batch, hidden_dims[-1]).
-        """
-        return self.backbone(x)
+        """Extract shared backbone embeddings (before task heads)."""
+        return self.lite(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass: fingerprint → 12 endpoint logits.
-
-        Args:
-            x: Input tensor of shape (batch, input_dim)
-
-        Returns:
-            Logits tensor of shape (batch, n_tasks). NOT sigmoid-ed.
-        """
-        embedding = self.backbone(x)
+        """Forward pass: fingerprint → 12 endpoint logits."""
+        embedding = self.lite(x)
         logits = torch.cat([head(embedding) for head in self.heads], dim=1)
         return logits
 
@@ -177,7 +188,7 @@ if __name__ == '__main__':
     model = ToxNet(input_dim=2048)
 
     total_params = sum(p.numel() for p in model.parameters())
-    backbone_params = sum(p.numel() for p in model.backbone.parameters())
+    backbone_params = sum(p.numel() for p in model.lite.backbone.parameters())
     head_params = total_params - backbone_params
 
     print(f"Total parameters:    {total_params:,}")

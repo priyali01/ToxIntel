@@ -36,10 +36,83 @@ import math
 
 from src.featurize import load_and_clean_tox21, featurize_dataset, TARGET_COLS
 from src.scaffold_split import scaffold_split
+from imblearn.under_sampling import TomekLinks
 from src.focal_loss import PerEndpointFocalLoss, compute_pos_weights
-from src.model import ToxNet
+from src.model import ToxNet, ToxNetLite
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+
+def refine_embeddings(lite_model, X, Y, device):
+    """
+    Pass 1.5: Use Tomek Links to clean up the embedding space.
+    Removes 'ambiguous' safe molecules that are structurally too similar to toxic ones.
+    """
+    lite_model.eval()
+    with torch.no_grad():
+        X_tensor = torch.tensor(X, dtype=torch.float32).to(device)
+        embeddings = lite_model(X_tensor).cpu().numpy()
+
+    # Tomek Links works on binary labels. For multi-task, we clean samples that
+    # are 'noisy' for ANY task (majority class removal).
+    # We create a 'any_toxic' label for the cleaner.
+    y_any = (Y.sum(axis=1) > 0).astype(int)
+    
+    tl = TomekLinks()
+    _, _ = tl.fit_resample(embeddings, y_any)
+    
+    # Get indices of kept samples
+    kept_indices = tl.sample_indices_
+    return kept_indices
+
+
+def train_model_two_pass(X_train, Y_train, X_val, Y_val, pos_weights,
+                         lr=1e-3, dropout=0.3, batch_size=64,
+                         gamma=2.0, hidden_dims=None, weight_decay=1e-4,
+                         head_hidden=128, label_smoothing=0.05,
+                         n_epochs=100, patience=15, warmup_epochs=10,
+                         verbose=True):
+    """
+    Advanced Two-Pass Training Strategy:
+    1. Pass 1: Train full model (Backbone + Heads) to learn embeddings.
+    2. Refine: Use Tomek Links to clean the embedding space.
+    3. Pass 2: Freeze backbone, re-train heads on cleaned data.
+    """
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    # --- Pass 1: Train Full Model ---
+    if verbose: print("\n--- Pass 1: Representation Learning ---")
+    model, _, _ = train_model(
+        X_train, Y_train, X_val, Y_val, pos_weights,
+        lr=lr, dropout=dropout, batch_size=batch_size,
+        gamma=gamma, hidden_dims=hidden_dims, weight_decay=weight_decay,
+        head_hidden=head_hidden, label_smoothing=label_smoothing,
+        n_epochs=n_epochs//2, patience=patience, warmup_epochs=warmup_epochs,
+        verbose=verbose
+    )
+
+    # --- Step 1.5: Tomek Links Refinement ---
+    if verbose: print("--- Refining Embedding Space (Tomek Links) ---")
+    kept_idx = refine_embeddings(model.lite, X_train, Y_train, device)
+    X_train_clean = X_train[kept_idx]
+    Y_train_clean = Y_train[kept_idx]
+    if verbose: print(f"  Removed {len(X_train) - len(X_train_clean)} ambiguous samples.")
+
+    # --- Pass 2: Freeze Backbone & Fine-tune Heads ---
+    if verbose: print("--- Pass 2: Task Head Fine-tuning (Backbone Frozen) ---")
+    model.freeze_backbone(True)
+    
+    # We use a smaller learning rate for fine-tuning
+    model, best_auprc, history = train_model(
+        X_train_clean, Y_train_clean, X_val, Y_val, pos_weights,
+        lr=lr/2, dropout=dropout, batch_size=batch_size,
+        gamma=gamma, hidden_dims=hidden_dims, weight_decay=weight_decay,
+        head_hidden=head_hidden, label_smoothing=label_smoothing,
+        n_epochs=n_epochs//2, patience=patience, warmup_epochs=warmup_epochs//2,
+        verbose=verbose, existing_model=model
+    )
+    
+    return model, best_auprc, history
 
 
 def prepare_data(method: str = 'ecfp4_2048'):
@@ -187,12 +260,13 @@ def train_model(X_train, Y_train, X_val, Y_val, pos_weights,
                 gamma=2.0, hidden_dims=None, weight_decay=1e-4,
                 head_hidden=128, label_smoothing=0.05,
                 n_epochs=100, patience=15, warmup_epochs=10,
-                verbose=True):
+                verbose=True, existing_model=None):
     """
     Full training loop with LR warmup + cosine annealing + early stopping.
 
     Key change from v1: patience increased to 15, warmup added,
     scheduler changed from ReduceLROnPlateau to warmup+cosine.
+    Also added 'existing_model' support for two-pass training.
 
     Returns:
         (model, best_val_auprc, history)
@@ -213,12 +287,15 @@ def train_model(X_train, Y_train, X_val, Y_val, pos_weights,
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, drop_last=True)
     val_loader   = DataLoader(val_ds,   batch_size=256)
 
-    model = ToxNet(
-        input_dim=X_train.shape[1],
-        hidden_dims=hidden_dims,
-        dropout=dropout,
-        head_hidden=head_hidden,
-    ).to(device)
+    if existing_model is not None:
+        model = existing_model
+    else:
+        model = ToxNet(
+            input_dim=X_train.shape[1],
+            hidden_dims=hidden_dims,
+            head_hidden=head_hidden,
+            dropout=dropout,
+        ).to(device)
 
     loss_fn = PerEndpointFocalLoss(
         pos_weights, gamma=gamma, label_smoothing=label_smoothing
@@ -291,14 +368,14 @@ def optuna_objective(trial, X_train, Y_train, X_val, Y_val, pos_weights):
         'large':  [1024, 512, 512, 256],
     }[dim_choice]
 
-    _, val_auprc, _ = train_model(
+    _, val_auprc, _ = train_model_two_pass(
         X_train, Y_train, X_val, Y_val, pos_weights,
         lr=lr, dropout=dropout, batch_size=batch_size,
         gamma=gamma, hidden_dims=hidden_dims,
         weight_decay=weight_decay, head_hidden=head_hidden,
         label_smoothing=label_smoothing,
-        n_epochs=50,      # was 30 — needs 15-25 epochs just to stabilize
-        patience=12,      # was 7 — give model time past warmup
+        n_epochs=50,
+        patience=12,
         warmup_epochs=8,
         verbose=False,
     )
@@ -353,8 +430,7 @@ def run_full_training(best_params, X_train, Y_train, X_val, Y_val,
         'large':  [1024, 512, 512, 256],
     }[best_params.get('hidden_dims', 'medium')]
 
-    print("\nTraining final model with best params...")
-    model, val_auprc, history = train_model(
+    model, val_auprc, history = train_model_two_pass(
         X_train, Y_train, X_val, Y_val, pos_weights,
         lr=best_params.get('lr', 1e-3),
         dropout=best_params.get('dropout', 0.3),
@@ -404,8 +480,8 @@ if __name__ == '__main__':
         )
     else:
         # Quick sanity check: 10 epochs, no Optuna
-        print("\n--- Quick Training Test (10 epochs, no Optuna) ---")
-        model, val_auprc, history = train_model(
+        print("\n--- Quick Two-Pass Training Test (10 epochs, no Optuna) ---")
+        model, val_auprc, history = train_model_two_pass(
             X_train, Y_train, X_val, Y_val, pos_weights,
             n_epochs=10, patience=10, warmup_epochs=3, verbose=True,
         )
