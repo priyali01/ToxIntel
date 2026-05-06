@@ -191,10 +191,13 @@ framework \cite{vovk2005} at 90\% empirical coverage, with Out-of-Distribution
 flagging for candidates distant from the training manifold.
 \end{enumerate}
 
-Through rigorous experimental validation, we demonstrate that ToxNet achieves
-a macro AUPRC of 0.364 and macro AUROC of 0.842 on the scaffold-stratified
-Tox21 test set---substantially outperforming logistic regression (AUPRC 0.240)
-and optimized XGBoost (AUPRC 0.310) baselines.
+ToxNet---a shared-backbone multi-task neural network utilizing a Two-Pass
+training strategy and Per-Endpoint Masked Focal Loss.
+We further introduce Geometric Refinement using Tomek Links to sharpen the
+decision boundary in the chemical embedding space.
+On the scaffold-stratified Tox21 benchmark, ToxNet achieves a macro AUPRC of
+\textbf{0.366} and a macro AUROC of 0.844---substantially outperforming 
+logistic regression (AUPRC 0.240) and optimized XGBoost (AUPRC 0.310) baselines.
 We further validate the geometric imbalance hypothesis empirically and
 demonstrate end-to-end prescriptive pipeline efficacy on representative toxic
 inputs.
@@ -318,10 +321,16 @@ Tanimoto coefficient.
 The \textit{cohesion ratio} $\rho = \mathcal{C}(S_+) / \mathcal{C}(S_-)$
 quantifies geometric imbalance; $\rho > 1.5$ indicates severe clustering of the
 toxic minority class and predicts inefficacy of spatial oversampling.
+To address this, we apply \textit{Geometric Refinement} using Tomek Links
+\cite{tomek1976} to remove ambiguous majority samples in the embedding space.
 
-\subsection{ToxNet Architecture and Focal Loss}
-ToxNet is a PyTorch multi-task neural network with a shared backbone of four
-fully connected layers (1024\,\textrightarrow\,512\,\textrightarrow\,512\,\textrightarrow\,256),
+\subsection{Two-Pass ToxNet Architecture and Focal Loss}
+ToxNet is trained via a Two-Pass strategy. In Pass 1, a \textit{ToxNetLite}
+embedding expert learns to compress high-dimensional fingerprints into a
+256-dimensional chemical manifold.
+In Pass 2, task-specific heads are fine-tuned on these embeddings while the
+backbone is frozen.
+The shared backbone consists of four fully connected layers...
 each equipped with a residual projection, Batch Normalization, GELU activation,
 and dropout ($p=0.3$).
 The shared representation feeds 12 independent sigmoid output heads.
@@ -399,8 +408,8 @@ Random Baseline       & ---          & 0.500 & $\sim$0.080 \\
 \end{tabular}
 \end{table}
 
-ToxNet achieves a macro AUPRC of 0.364 and macro AUROC of 0.842, representing
-a 4.5$\times$ improvement over the random baseline and a 17.4\% relative
+ToxNet achieves a macro AUPRC of 0.366 and macro AUROC of 0.844, representing
+a 4.5$\times$ improvement over the random baseline and a 18.1\% relative
 improvement over XGBoost in AUPRC.
 Fig.~\ref{fig_training} shows the training and validation loss curves, confirming
 stable convergence without overfitting throughout the 300-epoch training run.
